@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/docopt/docopt-go"
@@ -48,7 +47,12 @@ func main() {
 	// handle init command
 	if cmdLineArgs.Init {
 
-		err = saveConfig(cmdLineArgs.Server, cmdLineArgs.User)
+		configFilePath, err := getUserConfigFilePath()
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		err = saveConfig(cmdLineArgs.Server, cmdLineArgs.User, configFilePath)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -72,8 +76,22 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		fmt.Println(config)
-		fmt.Println(password)
+		sid, err := synoLogin(config.Server, config.User, password)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		torrentsList, err := listTorrents(config.Server, sid)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		printTorrentTasks(torrentsList)
+
+		err = synoLogout(config.Server)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
 	}
 

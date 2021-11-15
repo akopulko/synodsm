@@ -4,24 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/dustin/go-humanize"
 	"github.com/go-resty/resty/v2"
 )
 
-type SynoApiInfoData struct {
-	Path       string
-	MinVersion int
-	MaxVersion int
-}
-
-type SynoApiInfoResponse struct {
-	Data    map[string]SynoApiInfoData
-	Error   int
-	Success bool
-}
-
-func synoApiInfo(server string, api string) (*SynoApiInfoData, error) {
-
-	apiInfoData := SynoApiInfoData{}
+func synoApiInfo(server string, api string) (string, int, error) {
 
 	url := fmt.Sprintf(
 		"%s/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=%s",
@@ -32,23 +19,32 @@ func synoApiInfo(server string, api string) (*SynoApiInfoData, error) {
 	client := resty.New()
 	resp, err := client.R().Get(url)
 	if err != nil {
-		return &apiInfoData, err
+		return "", 0, err
 	}
 
-	var apiResponse SynoApiInfoResponse
+	apiResponse := struct {
+		Data map[string]struct {
+			Path       string `json:"path,omitempty"`
+			MinVersion int    `json:"minVersion,omitempty"`
+			MaxVersion int    `json:"maxVersion,omitempty"`
+		} `json:"data,omitempty"`
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
+	}{}
+
 	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
 
 	if err != nil {
-		return &apiInfoData, err
+		return "", 0, err
 	}
 
 	if !apiResponse.Success {
-		return &apiInfoData, fmt.Errorf("SYNO.API.Info Error %d", apiResponse.Error)
+		return "", 0, fmt.Errorf("SYNO.API.Info Error %d", apiResponse.Error.Code)
 	}
 
-	apiInfoData = apiResponse.Data[api]
-
-	return &apiInfoData, nil
+	return apiResponse.Data[api].Path, apiResponse.Data[api].MaxVersion, nil
 
 }
 
@@ -56,7 +52,8 @@ func synoLogin(server string, user string, password string) (string, error) {
 
 	// get api version and path
 	api := "SYNO.API.Auth"
-	apiInfo, err := synoApiInfo(server, api)
+	//apiInfo, err := synoApiInfo(server, api)
+	path, version, err := synoApiInfo(server, api)
 	if err != nil {
 		return "", err
 	}
@@ -65,9 +62,9 @@ func synoLogin(server string, user string, password string) (string, error) {
 	url := fmt.Sprintf(
 		"%s/webapi/%s?api=%s&version=%d&method=login&account=%s&passwd=%s&session=DownloadStation&format=sid",
 		server,
-		apiInfo.Path,
+		path,
 		api,
-		apiInfo.MaxVersion,
+		version,
 		user,
 		password,
 	)
@@ -81,9 +78,13 @@ func synoLogin(server string, user string, password string) (string, error) {
 
 	// parse login response
 	apiResponse := struct {
-		Data    struct{ Sid string }
-		Error   int
-		Success bool
+		Data struct {
+			Sid string `json:"sid,omitempty"`
+		} `json:"data,omitempty"`
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
 	}{}
 
 	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
@@ -93,7 +94,7 @@ func synoLogin(server string, user string, password string) (string, error) {
 	}
 
 	if !apiResponse.Success {
-		return "", fmt.Errorf("%s Error %d", api, apiResponse.Error)
+		return "", fmt.Errorf("%s Error %d", api, apiResponse.Error.Code)
 	}
 
 	return apiResponse.Data.Sid, nil
@@ -104,7 +105,9 @@ func synoLogout(server string) error {
 
 	// get api version and path
 	api := "SYNO.API.Auth"
-	apiInfo, err := synoApiInfo(server, api)
+	//apiInfo, err := synoApiInfo(server, api)
+	path, version, err := synoApiInfo(server, api)
+
 	if err != nil {
 		return err
 	}
@@ -113,9 +116,9 @@ func synoLogout(server string) error {
 	url := fmt.Sprintf(
 		"%s/webapi/%s?api=%s&version=%d&method=logout&session=DownloadStation",
 		server,
-		apiInfo.Path,
+		path, //apiInfo.Path,
 		api,
-		apiInfo.MaxVersion,
+		version, //apiInfo.MaxVersion,
 	)
 
 	// sent login request
@@ -127,8 +130,10 @@ func synoLogout(server string) error {
 
 	// parse login response
 	apiResponse := struct {
-		Error   int
-		Success bool
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
 	}{}
 
 	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
@@ -142,5 +147,88 @@ func synoLogout(server string) error {
 	}
 
 	return nil
+
+}
+
+func listTorrents(server string, sid string) ([]TorrentTask, error) {
+
+	// get api version and path
+	api := "SYNO.DownloadStation.Task"
+	//apiInfo, err := synoApiInfo(server, api)
+	path, version, err := synoApiInfo(server, api)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// build login url
+	url := fmt.Sprintf(
+		"%s/webapi/%s?api=%s&version=%d&method=list&additional=transfer&_sid=%s",
+		server,
+		path, //apiInfo.Path,
+		api,
+		version, //apiInfo.MaxVersion,
+		sid,
+	)
+
+	// sent login request
+	client := resty.New()
+	resp, err := client.R().Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	//parse tasks list response
+	apiResponse := struct {
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
+		Data    struct {
+			Tasks []struct {
+				Id         string `json:"id,omitempty"`
+				Type       string `json:"type,omitempty"`
+				Username   string `json:"username,omitempty"`
+				Title      string `json:"title,omitempty"`
+				Size       int64  `json:"size,omitempty"`
+				Status     string `json:"status,omitempty"`
+				Additional struct {
+					Transfer struct {
+						SizeDownloaded int64 `json:"size_downloaded"`
+					} `json:"transfer,omitempty"`
+				} `json:"additional,omitempty"`
+			}
+		}
+	}{}
+
+	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !apiResponse.Success {
+		return nil, fmt.Errorf("%s Error %d", api, apiResponse.Error)
+	}
+
+	// build result array of tasks informaton
+	var arrayTorrentTask []TorrentTask
+	for _, task := range apiResponse.Data.Tasks {
+		if task.Type == "bt" {
+			//progress := ((float64(task.Additional.Transfer.SizeDownloaded-task.Size) / float64(task.Size)) * 100) + 100
+			progress := calculatePercentage(task.Additional.Transfer.SizeDownloaded, task.Size)
+			torrentTask := TorrentTask{
+				Id:       task.Id,
+				Title:    task.Title,
+				User:     task.Username,
+				Size:     humanize.Bytes(uint64(task.Size)),
+				Status:   task.Status,
+				Progress: fmt.Sprintf("%.0f %%", progress),
+			}
+			arrayTorrentTask = append(arrayTorrentTask, torrentTask)
+		}
+	}
+
+	return arrayTorrentTask, nil
 
 }
