@@ -55,3 +55,14 @@ func testUri(uri string) error {
 
 	return nil
 }
+
+func isValidAction(action string) bool {
+	switch action {
+	case
+		"delete",
+		"pause",
+		"resume":
+		return true
+	}
+	return false
+}
