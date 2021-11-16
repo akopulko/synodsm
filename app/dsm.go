@@ -232,3 +232,53 @@ func listTorrents(server string, sid string) ([]TorrentTask, error) {
 	return arrayTorrentTask, nil
 
 }
+
+func addTorrentFromUri(server string, uri string, sid string) error {
+
+	// get api version and path
+	api := "SYNO.DownloadStation.Task"
+	path, version, err := synoApiInfo(server, api)
+
+	if err != nil {
+		return err
+	}
+
+	// build url
+	url := fmt.Sprintf(
+		"%s/webapi/%s?api=%s&version=%d&method=create&uri=%s&_sid=%s",
+		server,
+		path,
+		api,
+		version,
+		uri,
+		sid,
+	)
+
+	// send request
+	client := resty.New()
+	resp, err := client.R().Get(url)
+	if err != nil {
+		return err
+	}
+
+	// parse  response
+	apiResponse := struct {
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
+	}{}
+
+	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+
+	if err != nil {
+		return err
+	}
+
+	if !apiResponse.Success {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Error)
+	}
+
+	return nil
+
+}

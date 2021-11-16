@@ -8,10 +8,14 @@ import (
 
 func printTorrentTasks(tasks []TorrentTask) {
 
-	tabulateTasks := makeTorrentTasksTabulate(tasks)
-	tabulateOutput := gotabulate.Create(tabulateTasks)
-	tabulateOutput.SetHeaders([]string{"ID", "User", "Title", "Status", "Size (GB)", "Progress (%)"})
-	tabulateOutput.SetAlign("left")
-	fmt.Println(tabulateOutput.Render("grid"))
+	if len(tasks) > 0 {
+		tabulateTasks := makeTorrentTasksTabulate(tasks)
+		tabulateOutput := gotabulate.Create(tabulateTasks)
+		tabulateOutput.SetHeaders([]string{"ID", "User", "Title", "Status", "Size (GB)", "Progress (%)"})
+		tabulateOutput.SetAlign("left")
+		fmt.Println(tabulateOutput.Render("grid"))
+	} else {
+		fmt.Println("No tasks found")
+	}
 
 }
