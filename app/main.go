@@ -70,9 +70,7 @@ func main() {
 			log.Fatalln(err)
 		}
 
-	}
-
-	if cmdLineArgs.List {
+	} else {
 
 		config, err := loadConfig()
 		if err != nil {
@@ -84,159 +82,66 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		sid, err := synoLogin(config.Server, config.User, password)
+		sid, err := Login(config.Server, config.User, password)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
-		torrentsList, err := listTorrents(config.Server, sid)
+		// handle other commands
+		if cmdLineArgs.List {
+			torrentsList, err := listTorrents(config.Server, sid)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			printTorrentTasks(torrentsList)
+		}
+
+		if cmdLineArgs.AddUri {
+			// check valid uri
+			_, err := url.ParseRequestURI(cmdLineArgs.TorrentUri)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			// check uri live
+			err = testUri(cmdLineArgs.TorrentUri)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			err = addTorrentFromUri(config.Server, cmdLineArgs.TorrentUri, sid)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			fmt.Println("Task successfuly added to Download Station")
+		}
+
+		if cmdLineArgs.Remove {
+			err = manageTorrentTask(config.Server, cmdLineArgs.TaskID, "delete", sid)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			fmt.Printf("Task %s successfuly removed\n", cmdLineArgs.TaskID)
+		}
+
+		if cmdLineArgs.Pause {
+			err = manageTorrentTask(config.Server, cmdLineArgs.TaskID, "pause", sid)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			fmt.Printf("Task %s successfuly paused\n", cmdLineArgs.TaskID)
+		}
+
+		if cmdLineArgs.Resume {
+			err = manageTorrentTask(config.Server, cmdLineArgs.TaskID, "resume", sid)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			fmt.Printf("Task %s successfuly resumed\n", cmdLineArgs.TaskID)
+		}
+
+		err = Logout(config.Server)
 		if err != nil {
 			log.Fatalln(err)
 		}
-
-		printTorrentTasks(torrentsList)
-
-		err = synoLogout(config.Server)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-	}
-
-	if cmdLineArgs.AddUri {
-
-		// check valid uri
-		_, err := url.ParseRequestURI(cmdLineArgs.TorrentUri)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		// check uri live
-		err = testUri(cmdLineArgs.TorrentUri)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		config, err := loadConfig()
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		password, err := getPassword(config.User)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		sid, err := synoLogin(config.Server, config.User, password)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		err = addTorrentFromUri(config.Server, cmdLineArgs.TorrentUri, sid)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		fmt.Println("Task successfuly added to Download Station")
-
-		err = synoLogout(config.Server)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-	}
-
-	if cmdLineArgs.Remove {
-
-		config, err := loadConfig()
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		password, err := getPassword(config.User)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		sid, err := synoLogin(config.Server, config.User, password)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		err = removeTorrent(config.Server, cmdLineArgs.TaskID, sid)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		fmt.Printf("Task %s successfuly removed\n", cmdLineArgs.TaskID)
-
-		err = synoLogout(config.Server)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-	}
-
-	if cmdLineArgs.Pause {
-
-		config, err := loadConfig()
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		password, err := getPassword(config.User)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		sid, err := synoLogin(config.Server, config.User, password)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		err = pauseTorrent(config.Server, cmdLineArgs.TaskID, sid)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		fmt.Printf("Task %s successfuly paused\n", cmdLineArgs.TaskID)
-
-		err = synoLogout(config.Server)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-	}
-
-	if cmdLineArgs.Resume {
-
-		config, err := loadConfig()
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		password, err := getPassword(config.User)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		sid, err := synoLogin(config.Server, config.User, password)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		err = resumeTorrent(config.Server, cmdLineArgs.TaskID, sid)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		fmt.Printf("Task %s successfuly resumed\n", cmdLineArgs.TaskID)
-
-		err = synoLogout(config.Server)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
 	}
 
 }

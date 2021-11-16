@@ -3,23 +3,56 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/dustin/go-humanize"
 	"github.com/go-resty/resty/v2"
 )
 
-func synoApiInfo(server string, api string) (string, int, error) {
+type SynologyApiCallData struct {
+	Server string
+	Path   string
+	Params map[string]string
+}
 
-	url := fmt.Sprintf(
-		"%s/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=%s",
-		server,
-		api,
-	)
+func callSynologyApi(apiData SynologyApiCallData) ([]byte, error) {
 
-	client := resty.New()
-	resp, err := client.R().Get(url)
+	// build url for api call
+	apiCallUrl, err := url.Parse(fmt.Sprintf("%s/webapi/%s", apiData.Server, apiData.Path))
 	if err != nil {
-		return "", 0, err
+		return nil, err
+	}
+	params := url.Values{}
+	for key, value := range apiData.Params {
+		params.Add(key, value)
+	}
+	apiCallUrl.RawQuery = params.Encode()
+
+	//fmt.Println(apiCallUrl.String())
+
+	// make api call via resty
+	client := resty.New()
+	resp, err := client.R().Get(apiCallUrl.String())
+	if err != nil {
+		return nil, err
+	}
+
+	//fmt.Println(resp)
+
+	return resp.Body(), nil
+}
+
+func getSynologyApiInfo(server string, api string) (string, string, error) {
+
+	apiRequest := SynologyApiCallData{
+		Server: server,
+		Path:   "query.cgi",
+		Params: map[string]string{
+			"api":     "SYNO.API.Info",
+			"version": "1",
+			"method":  "query",
+			"query":   api,
+		},
 	}
 
 	apiResponse := struct {
@@ -34,44 +67,47 @@ func synoApiInfo(server string, api string) (string, int, error) {
 		Success bool `json:"success,omitempty"`
 	}{}
 
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
-
+	resp, err := callSynologyApi(apiRequest)
 	if err != nil {
-		return "", 0, err
+		return "", "", err
+	}
+
+	err = json.Unmarshal(resp, &apiResponse)
+	if err != nil {
+		return "", "", err
 	}
 
 	if !apiResponse.Success {
-		return "", 0, fmt.Errorf("SYNO.API.Info Error %d", apiResponse.Error.Code)
+		return "", "", fmt.Errorf("SYNO.API.Info Error %d", apiResponse.Error.Code)
 	}
 
-	return apiResponse.Data[api].Path, apiResponse.Data[api].MaxVersion, nil
+	return apiResponse.Data[api].Path, fmt.Sprintf("%d", apiResponse.Data[api].MaxVersion), nil
 
 }
 
-func synoLogin(server string, user string, password string) (string, error) {
+func Login(server string, user string, password string) (string, error) {
 
-	// get api version and path
 	api := "SYNO.API.Auth"
-	//apiInfo, err := synoApiInfo(server, api)
-	path, version, err := synoApiInfo(server, api)
+	path, version, err := getSynologyApiInfo(server, api)
 	if err != nil {
 		return "", err
 	}
 
-	// build login url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=login&account=%s&passwd=%s&session=DownloadStation&format=sid",
-		server,
-		path,
-		api,
-		version,
-		user,
-		password,
-	)
+	apiRequest := SynologyApiCallData{
+		Server: server,
+		Path:   path,
+		Params: map[string]string{
+			"api":     api,
+			"version": version,
+			"method":  "login",
+			"account": user,
+			"passwd":  password,
+			"session": "DownloadStation",
+			"format":  "sid",
+		},
+	}
 
-	// sent login request
-	client := resty.New()
-	resp, err := client.R().Get(url)
+	resp, err := callSynologyApi(apiRequest)
 	if err != nil {
 		return "", err
 	}
@@ -87,7 +123,7 @@ func synoLogin(server string, user string, password string) (string, error) {
 		Success bool `json:"success,omitempty"`
 	}{}
 
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+	err = json.Unmarshal(resp, &apiResponse)
 
 	if err != nil {
 		return "", err
@@ -101,29 +137,26 @@ func synoLogin(server string, user string, password string) (string, error) {
 
 }
 
-func synoLogout(server string) error {
+func Logout(server string) error {
 
-	// get api version and path
 	api := "SYNO.API.Auth"
-	//apiInfo, err := synoApiInfo(server, api)
-	path, version, err := synoApiInfo(server, api)
-
+	path, version, err := getSynologyApiInfo(server, api)
 	if err != nil {
 		return err
 	}
 
-	// build login url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=logout&session=DownloadStation",
-		server,
-		path, //apiInfo.Path,
-		api,
-		version, //apiInfo.MaxVersion,
-	)
+	apiRequest := SynologyApiCallData{
+		Server: server,
+		Path:   path,
+		Params: map[string]string{
+			"api":     api,
+			"version": version,
+			"method":  "logout",
+			"session": "DownloadStation",
+		},
+	}
 
-	// sent login request
-	client := resty.New()
-	resp, err := client.R().Get(url)
+	resp, err := callSynologyApi(apiRequest)
 	if err != nil {
 		return err
 	}
@@ -136,7 +169,7 @@ func synoLogout(server string) error {
 		Success bool `json:"success,omitempty"`
 	}{}
 
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+	err = json.Unmarshal(resp, &apiResponse)
 
 	if err != nil {
 		return err
@@ -154,26 +187,24 @@ func listTorrents(server string, sid string) ([]TorrentTask, error) {
 
 	// get api version and path
 	api := "SYNO.DownloadStation.Task"
-	//apiInfo, err := synoApiInfo(server, api)
-	path, version, err := synoApiInfo(server, api)
-
+	path, version, err := getSynologyApiInfo(server, api)
 	if err != nil {
 		return nil, err
 	}
 
-	// build login url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=list&additional=transfer&_sid=%s",
-		server,
-		path, //apiInfo.Path,
-		api,
-		version, //apiInfo.MaxVersion,
-		sid,
-	)
+	apiRequest := SynologyApiCallData{
+		Server: server,
+		Path:   path,
+		Params: map[string]string{
+			"api":        api,
+			"version":    version,
+			"method":     "list",
+			"additional": "transfer",
+			"_sid":       sid,
+		},
+	}
 
-	// sent login request
-	client := resty.New()
-	resp, err := client.R().Get(url)
+	resp, err := callSynologyApi(apiRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +232,7 @@ func listTorrents(server string, sid string) ([]TorrentTask, error) {
 		}
 	}{}
 
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+	err = json.Unmarshal(resp, &apiResponse)
 
 	if err != nil {
 		return nil, err
@@ -237,26 +268,24 @@ func addTorrentFromUri(server string, uri string, sid string) error {
 
 	// get api version and path
 	api := "SYNO.DownloadStation.Task"
-	path, version, err := synoApiInfo(server, api)
-
+	path, version, err := getSynologyApiInfo(server, api)
 	if err != nil {
 		return err
 	}
 
-	// build url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=create&uri=%s&_sid=%s",
-		server,
-		path,
-		api,
-		version,
-		uri,
-		sid,
-	)
+	apiRequest := SynologyApiCallData{
+		Server: server,
+		Path:   path,
+		Params: map[string]string{
+			"api":     api,
+			"version": version,
+			"method":  "create",
+			"uri":     uri,
+			"_sid":    sid,
+		},
+	}
 
-	// send request
-	client := resty.New()
-	resp, err := client.R().Get(url)
+	resp, err := callSynologyApi(apiRequest)
 	if err != nil {
 		return err
 	}
@@ -269,7 +298,7 @@ func addTorrentFromUri(server string, uri string, sid string) error {
 		Success bool `json:"success,omitempty"`
 	}{}
 
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+	err = json.Unmarshal(resp, &apiResponse)
 
 	if err != nil {
 		return err
@@ -283,35 +312,35 @@ func addTorrentFromUri(server string, uri string, sid string) error {
 
 }
 
-func removeTorrent(server string, id string, sid string) error {
+func manageTorrentTask(server string, taskId string, action string, sid string) error {
 
-	// get api version and path
+	if !isValidAction(action) {
+		return fmt.Errorf("provided action '%s' is invalid", action)
+	}
+
 	api := "SYNO.DownloadStation.Task"
-	path, version, err := synoApiInfo(server, api)
-
+	path, version, err := getSynologyApiInfo(server, api)
 	if err != nil {
 		return err
 	}
 
-	// build url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=delete&force_complete=true&id=%s&_sid=%s",
-		server,
-		path,
-		api,
-		version,
-		id,
-		sid,
-	)
+	apiRequest := SynologyApiCallData{
+		Server: server,
+		Path:   path,
+		Params: map[string]string{
+			"api":     api,
+			"version": version,
+			"method":  action,
+			"id":      taskId,
+			"_sid":    sid,
+		},
+	}
 
-	// send request
-	client := resty.New()
-	resp, err := client.R().Get(url)
+	resp, err := callSynologyApi(apiRequest)
 	if err != nil {
 		return err
 	}
 
-	//parse  response
 	apiResponse := struct {
 		Error struct {
 			Code int `json:"code,omitempty"`
@@ -323,123 +352,7 @@ func removeTorrent(server string, id string, sid string) error {
 		}
 	}{}
 
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
-
-	if err != nil {
-		return err
-	}
-
-	if !apiResponse.Success {
-		return fmt.Errorf("%s Error %d", api, apiResponse.Error)
-	}
-
-	if apiResponse.Data[0].Error != 0 {
-		return fmt.Errorf("%s Error %d", api, apiResponse.Data[0].Error)
-	}
-
-	return nil
-
-}
-
-func pauseTorrent(server string, id string, sid string) error {
-
-	// get api version and path
-	api := "SYNO.DownloadStation.Task"
-	path, version, err := synoApiInfo(server, api)
-
-	if err != nil {
-		return err
-	}
-
-	// build url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=pause&id=%s&_sid=%s",
-		server,
-		path,
-		api,
-		version,
-		id,
-		sid,
-	)
-
-	// send request
-	client := resty.New()
-	resp, err := client.R().Get(url)
-	if err != nil {
-		return err
-	}
-
-	//parse  response
-	apiResponse := struct {
-		Error struct {
-			Code int `json:"code,omitempty"`
-		} `json:"error,omitempty"`
-		Success bool `json:"success,omitempty"`
-		Data    []struct {
-			Error int    `json:"error,omitempty"`
-			Id    string `json:"id,omitempty"`
-		}
-	}{}
-
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
-
-	if err != nil {
-		return err
-	}
-
-	if !apiResponse.Success {
-		return fmt.Errorf("%s Error %d", api, apiResponse.Error)
-	}
-
-	if apiResponse.Data[0].Error != 0 {
-		return fmt.Errorf("%s Error %d", api, apiResponse.Data[0].Error)
-	}
-
-	return nil
-
-}
-
-func resumeTorrent(server string, id string, sid string) error {
-
-	// get api version and path
-	api := "SYNO.DownloadStation.Task"
-	path, version, err := synoApiInfo(server, api)
-
-	if err != nil {
-		return err
-	}
-
-	// build url
-	url := fmt.Sprintf(
-		"%s/webapi/%s?api=%s&version=%d&method=resume&id=%s&_sid=%s",
-		server,
-		path,
-		api,
-		version,
-		id,
-		sid,
-	)
-
-	// send request
-	client := resty.New()
-	resp, err := client.R().Get(url)
-	if err != nil {
-		return err
-	}
-
-	//parse  response
-	apiResponse := struct {
-		Error struct {
-			Code int `json:"code,omitempty"`
-		} `json:"error,omitempty"`
-		Success bool `json:"success,omitempty"`
-		Data    []struct {
-			Error int    `json:"error,omitempty"`
-			Id    string `json:"id,omitempty"`
-		}
-	}{}
-
-	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+	err = json.Unmarshal(resp, &apiResponse)
 
 	if err != nil {
 		return err
