@@ -282,3 +282,177 @@ func addTorrentFromUri(server string, uri string, sid string) error {
 	return nil
 
 }
+
+func removeTorrent(server string, id string, sid string) error {
+
+	// get api version and path
+	api := "SYNO.DownloadStation.Task"
+	path, version, err := synoApiInfo(server, api)
+
+	if err != nil {
+		return err
+	}
+
+	// build url
+	url := fmt.Sprintf(
+		"%s/webapi/%s?api=%s&version=%d&method=delete&force_complete=true&id=%s&_sid=%s",
+		server,
+		path,
+		api,
+		version,
+		id,
+		sid,
+	)
+
+	// send request
+	client := resty.New()
+	resp, err := client.R().Get(url)
+	if err != nil {
+		return err
+	}
+
+	//parse  response
+	apiResponse := struct {
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
+		Data    []struct {
+			Error int    `json:"error,omitempty"`
+			Id    string `json:"id,omitempty"`
+		}
+	}{}
+
+	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+
+	if err != nil {
+		return err
+	}
+
+	if !apiResponse.Success {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Error)
+	}
+
+	if apiResponse.Data[0].Error != 0 {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Data[0].Error)
+	}
+
+	return nil
+
+}
+
+func pauseTorrent(server string, id string, sid string) error {
+
+	// get api version and path
+	api := "SYNO.DownloadStation.Task"
+	path, version, err := synoApiInfo(server, api)
+
+	if err != nil {
+		return err
+	}
+
+	// build url
+	url := fmt.Sprintf(
+		"%s/webapi/%s?api=%s&version=%d&method=pause&id=%s&_sid=%s",
+		server,
+		path,
+		api,
+		version,
+		id,
+		sid,
+	)
+
+	// send request
+	client := resty.New()
+	resp, err := client.R().Get(url)
+	if err != nil {
+		return err
+	}
+
+	//parse  response
+	apiResponse := struct {
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
+		Data    []struct {
+			Error int    `json:"error,omitempty"`
+			Id    string `json:"id,omitempty"`
+		}
+	}{}
+
+	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+
+	if err != nil {
+		return err
+	}
+
+	if !apiResponse.Success {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Error)
+	}
+
+	if apiResponse.Data[0].Error != 0 {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Data[0].Error)
+	}
+
+	return nil
+
+}
+
+func resumeTorrent(server string, id string, sid string) error {
+
+	// get api version and path
+	api := "SYNO.DownloadStation.Task"
+	path, version, err := synoApiInfo(server, api)
+
+	if err != nil {
+		return err
+	}
+
+	// build url
+	url := fmt.Sprintf(
+		"%s/webapi/%s?api=%s&version=%d&method=resume&id=%s&_sid=%s",
+		server,
+		path,
+		api,
+		version,
+		id,
+		sid,
+	)
+
+	// send request
+	client := resty.New()
+	resp, err := client.R().Get(url)
+	if err != nil {
+		return err
+	}
+
+	//parse  response
+	apiResponse := struct {
+		Error struct {
+			Code int `json:"code,omitempty"`
+		} `json:"error,omitempty"`
+		Success bool `json:"success,omitempty"`
+		Data    []struct {
+			Error int    `json:"error,omitempty"`
+			Id    string `json:"id,omitempty"`
+		}
+	}{}
+
+	err = json.Unmarshal([]byte(resp.Body()), &apiResponse)
+
+	if err != nil {
+		return err
+	}
+
+	if !apiResponse.Success {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Error)
+	}
+
+	if apiResponse.Data[0].Error != 0 {
+		return fmt.Errorf("%s Error %d", api, apiResponse.Data[0].Error)
+	}
+
+	return nil
+
+}

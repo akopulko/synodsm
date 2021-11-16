@@ -14,6 +14,10 @@ Usage:
 	synodsm list
 	synodsm remove <task_id>
 	synodsm add-uri <torrent_file_uri>
+	synodsm pause <task_id>
+	synodsm resume <task_id>
+
+
 `
 
 type CmdLineArgs struct {
@@ -21,7 +25,8 @@ type CmdLineArgs struct {
 	List       bool   `docopt:"list"`
 	Remove     bool   `docopt:"remove"`
 	AddUri     bool   `docopt:"add-uri"`
-	AddMagnet  bool   `docopt:"add-magnet"`
+	Pause      bool   `docopt:"pause"`
+	Resume     bool   `docopt:"resume"`
 	Server     string `docopt:"<server>"`
 	User       string `docopt:"<user>"`
 	Password   string `docopt:"<password>"`
@@ -133,6 +138,99 @@ func main() {
 		}
 
 		fmt.Println("Task successfuly added to Download Station")
+
+		err = synoLogout(config.Server)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+	}
+
+	if cmdLineArgs.Remove {
+
+		config, err := loadConfig()
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		password, err := getPassword(config.User)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		sid, err := synoLogin(config.Server, config.User, password)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		err = removeTorrent(config.Server, cmdLineArgs.TaskID, sid)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		fmt.Printf("Task %s successfuly removed\n", cmdLineArgs.TaskID)
+
+		err = synoLogout(config.Server)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+	}
+
+	if cmdLineArgs.Pause {
+
+		config, err := loadConfig()
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		password, err := getPassword(config.User)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		sid, err := synoLogin(config.Server, config.User, password)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		err = pauseTorrent(config.Server, cmdLineArgs.TaskID, sid)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		fmt.Printf("Task %s successfuly paused\n", cmdLineArgs.TaskID)
+
+		err = synoLogout(config.Server)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+	}
+
+	if cmdLineArgs.Resume {
+
+		config, err := loadConfig()
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		password, err := getPassword(config.User)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		sid, err := synoLogin(config.Server, config.User, password)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		err = resumeTorrent(config.Server, cmdLineArgs.TaskID, sid)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		fmt.Printf("Task %s successfuly resumed\n", cmdLineArgs.TaskID)
 
 		err = synoLogout(config.Server)
 		if err != nil {
