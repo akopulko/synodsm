@@ -25,7 +25,7 @@ func getUserConfigFilePath() (string, error) {
 
 }
 
-func saveConfig(server string, user string) error {
+func saveConfig(server string, user string, fileName string) error {
 
 	cfgIni := ini.Empty()
 
@@ -40,12 +40,8 @@ func saveConfig(server string, user string) error {
 		return err
 	}
 
-	configFilePath, err := getUserConfigFilePath()
-	if err != nil {
-		return err
-	}
-
-	err = cfgIni.SaveTo(configFilePath)
+	err = cfgIni.SaveTo(fileName)
+	// err = cfgIni.SaveTo(configFilePath)
 	if err != nil {
 		return err
 	}
